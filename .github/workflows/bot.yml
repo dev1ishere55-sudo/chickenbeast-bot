@@ -1,0 +1,25 @@
+name: chickenbeast-bot
+
+# Keeps @chickenbeastbot answering /start. Each run long-polls Telegram for
+# ~5h40m; the schedule queues the next run so there is always one polling.
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: chickenbeast-bot
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - name: Answer Telegram messages
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python3 bot.py
