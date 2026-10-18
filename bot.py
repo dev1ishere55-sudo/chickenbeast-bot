@@ -32,7 +32,7 @@ def welcome(name: str) -> str:
         "🔗 Link your Phantom or Solflare wallet to your gym card\n"
         "👥 Join a clan and tip your flock\n"
         "🏆 Ranks from Scrawny Chick → Apex Beast\n\n"
-        "Built around <b>$CHICKY</b> on Solana. Tap PLAY 👇"
+        "Built around <b>$CBEAST</b> on Solana. Tap PLAY 👇"
     )
 
 
@@ -64,6 +64,24 @@ def api(method: str, body: dict, timeout: int = 30) -> dict:
         return {"ok": False, "error_code": e.code, "description": detail}
 
 
+def setup_bot() -> None:
+    """Idempotent: commands list + chat menu button that opens the Mini App."""
+    api("setMyCommands", {"commands": [
+        {"command": "start", "description": "Open the gym"},
+        {"command": "play", "description": "Play Chickenbeast"},
+        {"command": "help", "description": "How it works"},
+    ]})
+    api("setChatMenuButton", {"menu_button": {"type": "web_app", "text": "PLAY", "web_app": {"url": APP_URL}}})
+
+
+def play_markup(ref: str = "") -> dict:
+    url = APP_URL + (f"?ref={ref}" if ref else "")
+    return {"inline_keyboard": [
+        [{"text": "🐔 PLAY CHICKENBEAST", "web_app": {"url": url}}],
+        [{"text": "💪 How it works", "callback_data": "help"}],
+    ]}
+
+
 def handle(update: dict) -> None:
     msg = update.get("message")
     if msg and isinstance(msg.get("text"), str) and msg.get("chat", {}).get("id"):
@@ -71,7 +89,12 @@ def handle(update: dict) -> None:
         chat = msg["chat"]["id"]
         name = (msg.get("from") or {}).get("first_name") or "beast"
         text = HELP if cmd == "/help" else welcome(name)
-        r = api("sendMessage", {"chat_id": chat, "text": text, "parse_mode": "HTML", "reply_markup": PLAY})
+        parts = msg["text"].strip().split()
+        ref = ""
+        if cmd == "/start" and len(parts) > 1 and parts[1].startswith("ref_"):
+            ref = "".join(c for c in parts[1][4:] if c.isalnum())[:16]  # /start ref_<code> from the site's referral link
+            print(f"referral start ref={ref}", flush=True)
+        r = api("sendMessage", {"chat_id": chat, "text": text, "parse_mode": "HTML", "reply_markup": play_markup(ref)})
         print(f"reply {cmd or 'text'} -> ok={r.get('ok')}", flush=True)
     cb = update.get("callback_query")
     if cb and cb.get("id"):
@@ -84,14 +107,18 @@ def handle(update: dict) -> None:
 
 def main() -> int:
     if not TOKEN:
-        print("TELEGRAM_BOT_TOKEN secret is missing", file=sys.stderr)
+        print("::error::TELEGRAM_BOT_TOKEN secret is missing - add it in Settings > Secrets and variables > Actions", file=sys.stderr)
         return 1
     me = api("getMe", {})
     if not me.get("ok"):
-        print(f"getMe failed: {me}", file=sys.stderr)
+        print(f"::error::getMe failed (bad token or Telegram unreachable): {me}", file=sys.stderr)
         return 1
     print(f"bot @{me['result']['username']} polling for {RUN_SECONDS}s", flush=True)
+    info = api("getWebhookInfo", {}).get("result", {})
+    if info.get("url"):
+        print(f"WARNING: webhook was set to {info['url']} (pending={info.get('pending_update_count')}, last_error={info.get('last_error_message')}); removing it so polling works", flush=True)
     api("deleteWebhook", {"drop_pending_updates": False})  # polling needs no webhook
+    setup_bot()
     deadline = time.time() + RUN_SECONDS
     offset = None
     handled = 0
