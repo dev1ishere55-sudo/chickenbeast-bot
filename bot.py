@@ -1,9 +1,7 @@
-"""@chickenbeastbot responder (runs on GitHub Actions, no server/Supabase needed).
+"""@chickenbeastbot responder (runs on GitHub Actions).
 
-Long-polls Telegram getUpdates and replies to /start, /play, /help and the
-"How it works" button with a PLAY button that opens the Chickenbeast Mini App.
+Long-polls Telegram getUpdates and replies to /start, /play, /help, /contest.
 The bot token comes from the TELEGRAM_BOT_TOKEN Actions secret, never from code.
-Runs for RUN_SECONDS, then exits so the next scheduled run takes over.
 """
 import html
 import json
@@ -15,17 +13,31 @@ import urllib.request
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 RUN_SECONDS = int(os.environ.get("RUN_SECONDS", str(5 * 3600 + 40 * 60)))
-APP_URL = "https://dev1ishere55-sudo.github.io/chickenbeast-site/"
+APP_URL = "https://beastly-point-tap-v2-kyariball2910-8168s-projects.vercel.app/"
 
 PLAY = {"inline_keyboard": [
-    [{"text": "🐔 PLAY CHICKENBEAST", "web_app": {"url": APP_URL}}],
+    [{"text": "🐓 PLAY CHICKENBEAST", "web_app": {"url": APP_URL}}],
     [{"text": "💪 How it works", "callback_data": "help"}],
+    [{"text": "🏆 Meme Contest", "callback_data": "contest"}],
 ]}
+
+CONTEST = (
+    "<b>🐓 CHICKENBEAST MEME CONTEST</b>\n\n"
+    "Creativity builds the community. The community builds the BEAST!\n\n"
+    "<b>$60 donated prize pool</b> (awarded in SOL)\n"
+    "1st $20 · 2nd $15 · 3rd $10 · 4th–8th $5 to $1\n\n"
+    "📅 Oct 19–24, 2026 — Submissions open\n"
+    "🏆 Sunday Oct 25 — Winners selected\n\n"
+    "Post in the <b>MEME CONTEST</b> topic. Max 5 entries/day. Label your category.\n\n"
+    "Categories: Best Animation, Best Halloween, Best Comedy, Best Artistic/Marketable.\n"
+    "Quality over quantity. Five great memes beat fifty forgettable ones.\n\n"
+    "t.me/ChickenBeast"
+)
 
 
 def welcome(name: str) -> str:
     return (
-        f"🐔💪 <b>Welcome to the gym, {html.escape(name)}!</b>\n\n"
+        f"🐓💪 <b>Welcome to the gym, {html.escape(name)}!</b>\n\n"
         "<b>Chickenbeast is TOO JACKED TO RUG.</b>\n\n"
         "Tap the beast to earn <b>Beast Points</b>, claim your passive gains, "
         "buy upgrades and climb the leaderboard.\n\n"
@@ -65,11 +77,11 @@ def api(method: str, body: dict, timeout: int = 30) -> dict:
 
 
 def setup_bot() -> None:
-    """Idempotent: commands list + chat menu button that opens the Mini App."""
     api("setMyCommands", {"commands": [
         {"command": "start", "description": "Open the gym"},
         {"command": "play", "description": "Play Chickenbeast"},
         {"command": "help", "description": "How it works"},
+        {"command": "contest", "description": "Meme contest rules"},
     ]})
     api("setChatMenuButton", {"menu_button": {"type": "web_app", "text": "PLAY", "web_app": {"url": APP_URL}}})
 
@@ -77,8 +89,9 @@ def setup_bot() -> None:
 def play_markup(ref: str = "") -> dict:
     url = APP_URL + (f"?ref={ref}" if ref else "")
     return {"inline_keyboard": [
-        [{"text": "🐔 PLAY CHICKENBEAST", "web_app": {"url": url}}],
+        [{"text": "🐓 PLAY CHICKENBEAST", "web_app": {"url": url}}],
         [{"text": "💪 How it works", "callback_data": "help"}],
+        [{"text": "🏆 Meme Contest", "callback_data": "contest"}],
     ]}
 
 
@@ -88,11 +101,16 @@ def handle(update: dict) -> None:
         cmd = msg["text"].strip().split()[0].split("@")[0].lower() if msg["text"].strip() else ""
         chat = msg["chat"]["id"]
         name = (msg.get("from") or {}).get("first_name") or "beast"
-        text = HELP if cmd == "/help" else welcome(name)
+        if cmd == "/contest":
+            text = CONTEST
+        elif cmd == "/help":
+            text = HELP
+        else:
+            text = welcome(name)
         parts = msg["text"].strip().split()
         ref = ""
         if cmd == "/start" and len(parts) > 1 and parts[1].startswith("ref_"):
-            ref = "".join(c for c in parts[1][4:] if c.isalnum())[:16]  # /start ref_<code> from the site's referral link
+            ref = "".join(c for c in parts[1][4:] if c.isalnum())[:16]
             print(f"referral start ref={ref}", flush=True)
         r = api("sendMessage", {"chat_id": chat, "text": text, "parse_mode": "HTML", "reply_markup": play_markup(ref)})
         print(f"reply {cmd or 'text'} -> ok={r.get('ok')}", flush=True)
@@ -100,9 +118,13 @@ def handle(update: dict) -> None:
     if cb and cb.get("id"):
         api("answerCallbackQuery", {"callback_query_id": cb["id"]})
         chat = (cb.get("message") or {}).get("chat", {}).get("id")
-        if cb.get("data") == "help" and chat:
+        data = cb.get("data")
+        if data == "help" and chat:
             r = api("sendMessage", {"chat_id": chat, "text": HELP, "parse_mode": "HTML", "reply_markup": PLAY})
             print(f"reply help-button -> ok={r.get('ok')}", flush=True)
+        elif data == "contest" and chat:
+            r = api("sendMessage", {"chat_id": chat, "text": CONTEST, "parse_mode": "HTML", "reply_markup": PLAY})
+            print(f"reply contest-button -> ok={r.get('ok')}", flush=True)
 
 
 def main() -> int:
@@ -116,8 +138,8 @@ def main() -> int:
     print(f"bot @{me['result']['username']} polling for {RUN_SECONDS}s", flush=True)
     info = api("getWebhookInfo", {}).get("result", {})
     if info.get("url"):
-        print(f"WARNING: webhook was set to {info['url']} (pending={info.get('pending_update_count')}, last_error={info.get('last_error_message')}); removing it so polling works", flush=True)
-    api("deleteWebhook", {"drop_pending_updates": False})  # polling needs no webhook
+        print(f"WARNING: webhook was set to {info['url']}; removing it so polling works", flush=True)
+    api("deleteWebhook", {"drop_pending_updates": False})
     setup_bot()
     deadline = time.time() + RUN_SECONDS
     offset = None
@@ -134,7 +156,7 @@ def main() -> int:
             time.sleep(3)
             continue
         if not res.get("ok"):
-            if res.get("error_code") == 409:  # another run still polling
+            if res.get("error_code") == 409:
                 time.sleep(10)
             else:
                 time.sleep(3)
@@ -144,10 +166,10 @@ def main() -> int:
             try:
                 handle(u)
                 handled += 1
-            except Exception as e:  # one bad update must not stop the bot
+            except Exception as e:
                 print(f"update {u.get('update_id')} failed: {e}", flush=True)
     if offset is not None:
-        api("getUpdates", {"offset": offset, "timeout": 0})  # confirm handled updates
+        api("getUpdates", {"offset": offset, "timeout": 0})
     print(f"done, handled {handled} updates", flush=True)
     return 0
 
