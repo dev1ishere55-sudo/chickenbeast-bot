@@ -1,6 +1,6 @@
 """@chickenbeastbot responder (runs on GitHub Actions).
 
-Long-polls Telegram getUpdates and replies to /start, /play, /help, /contest.
+Long-polls Telegram getUpdates and replies to /start, /play, /help, /contest, /squad, /pump.
 The bot token comes from the TELEGRAM_BOT_TOKEN Actions secret, never from code.
 """
 import html
@@ -13,12 +13,13 @@ import urllib.request
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 RUN_SECONDS = int(os.environ.get("RUN_SECONDS", str(5 * 3600 + 40 * 60)))
-APP_URL = "https://beastly-point-tap-v2-kyariball2910-8168s-projects.vercel.app/"
+APP_URL = "https://beastly-point-tap.vercel.app/"
 
 PLAY = {"inline_keyboard": [
     [{"text": "🐓 PLAY CHICKENBEAST", "web_app": {"url": APP_URL}}],
     [{"text": "💪 How it works", "callback_data": "help"}],
     [{"text": "🏆 Meme Contest", "callback_data": "contest"}],
+    [{"text": "👥 Gym Squads", "callback_data": "squad"}],
 ]}
 
 CONTEST = (
@@ -34,6 +35,21 @@ CONTEST = (
     "t.me/ChickenBeast"
 )
 
+SQUAD = (
+    "<b>👥 Gym Squads</b>\n\n"
+    "Form a squad with friends. Your combined BP unlocks group multipliers.\n"
+    "Share your invite link. When recruits join through you, you both get a head start.\n\n"
+    "Direct recruits: 10% of their BP\n"
+    "Their recruits: 3% of their BP"
+)
+
+PUMP = (
+    "<b>🔥 Global Pump</b>\n\n"
+    "Every 24 hours a 5-minute Global Pump hits.\n"
+    "Stamina becomes infinite and all taps earn 5× BP.\n"
+    "Watch the bot for the countdown."
+)
+
 
 def welcome(name: str) -> str:
     return (
@@ -41,10 +57,11 @@ def welcome(name: str) -> str:
         "<b>Chickenbeast is TOO JACKED TO RUG.</b>\n\n"
         "Tap the beast to earn <b>Beast Points</b>, claim your passive gains, "
         "buy upgrades and climb the leaderboard.\n\n"
-        "🔗 Link your Phantom or Solflare wallet to your gym card\n"
-        "👥 Join a clan and tip your flock\n"
-        "🏆 Ranks from Scrawny Chick → Apex Beast\n\n"
-        "Built around <b>$CBEAST</b> on Solana. Tap PLAY 👇"
+        "🐓 Ranks from Scrawny Chick → Apex Beast\n"
+        "🔥 Frenzy mode on rapid taps\n"
+        "🥚 Offline vault builds while you're away\n"
+        "🔥 7-day streak rewards\n\n"
+        "No wallet needed. Just open and start flexing. Tap PLAY 👇"
     )
 
 
@@ -52,10 +69,10 @@ HELP = (
     "<b>How Chickenbeast works</b>\n\n"
     "1. Tap <b>PLAY</b> to open the gym\n"
     "2. Tap the beast: every tap = Beast Points (BP). 12 fast taps = Frenzy (2× BP)\n"
-    "3. Claim incubation: passive BP builds up for up to 8 hours\n"
+    "3. Claim the Vault: passive BP builds up for up to 8 hours\n"
     "4. Spend BP on Whey, Creatine, Pre-Workout and Mega Flex\n"
-    "5. Sign in to save progress, then connect Phantom or Solflare\n\n"
-    "Beast Points are in-game points. Connecting a wallet never moves funds."
+    "5. Check your 7-day streak for daily bonuses\n\n"
+    "Beast Points are in-game points. No wallet required to play."
 )
 
 
@@ -82,6 +99,8 @@ def setup_bot() -> None:
         {"command": "play", "description": "Play Chickenbeast"},
         {"command": "help", "description": "How it works"},
         {"command": "contest", "description": "Meme contest rules"},
+        {"command": "squad", "description": "Gym Squads"},
+        {"command": "pump", "description": "Global Pump event"},
     ]})
     api("setChatMenuButton", {"menu_button": {"type": "web_app", "text": "PLAY", "web_app": {"url": APP_URL}}})
 
@@ -92,6 +111,7 @@ def play_markup(ref: str = "") -> dict:
         [{"text": "🐓 PLAY CHICKENBEAST", "web_app": {"url": url}}],
         [{"text": "💪 How it works", "callback_data": "help"}],
         [{"text": "🏆 Meme Contest", "callback_data": "contest"}],
+        [{"text": "👥 Gym Squads", "callback_data": "squad"}],
     ]}
 
 
@@ -105,6 +125,10 @@ def handle(update: dict) -> None:
             text = CONTEST
         elif cmd == "/help":
             text = HELP
+        elif cmd == "/squad":
+            text = SQUAD
+        elif cmd == "/pump":
+            text = PUMP
         else:
             text = welcome(name)
         parts = msg["text"].strip().split()
@@ -125,6 +149,9 @@ def handle(update: dict) -> None:
         elif data == "contest" and chat:
             r = api("sendMessage", {"chat_id": chat, "text": CONTEST, "parse_mode": "HTML", "reply_markup": PLAY})
             print(f"reply contest-button -> ok={r.get('ok')}", flush=True)
+        elif data == "squad" and chat:
+            r = api("sendMessage", {"chat_id": chat, "text": SQUAD, "parse_mode": "HTML", "reply_markup": PLAY})
+            print(f"reply squad-button -> ok={r.get('ok')}", flush=True)
 
 
 def main() -> int:
