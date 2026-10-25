@@ -1,6 +1,6 @@
 """@chickenbeastbot responder (runs on GitHub Actions).
 
-Long-polls Telegram getUpdates and replies to /start, /play, /help, /contest, /squad, /pump.
+Long-polls Telegram getUpdates and replies to /start, /play, /help, /contest, /squad, /pump, /notify, /streak.
 The bot token comes from the TELEGRAM_BOT_TOKEN Actions secret, never from code.
 """
 import html
@@ -16,10 +16,11 @@ RUN_SECONDS = int(os.environ.get("RUN_SECONDS", str(5 * 3600 + 40 * 60)))
 APP_URL = "https://beastly-point-tap.vercel.app/"
 
 PLAY = {"inline_keyboard": [
-    [{"text": "🐓 PLAY CHICKENBEAST", "web_app": {"url": APP_URL}}],
+    [{"text": "🐓 PLAY CHICKEN BEAST", "web_app": {"url": APP_URL}}],
     [{"text": "💪 How it works", "callback_data": "help"}],
     [{"text": "🏆 Meme Contest", "callback_data": "contest"}],
-    [{"text": "👥 Gym Squads", "callback_data": "squad"}],
+    [{"text": "👥 Squads", "callback_data": "squad"}],
+    [{"text": "🔔 Notifications", "callback_data": "notify"}],
 ]}
 
 CONTEST = (
@@ -31,14 +32,13 @@ CONTEST = (
     "🏆 Sunday Oct 25 — Winners selected\n\n"
     "Post in the <b>MEME CONTEST</b> topic. Max 5 entries/day. Label your category.\n\n"
     "Categories: Best Animation, Best Halloween, Best Comedy, Best Artistic/Marketable.\n"
-    "Quality over quantity. Five great memes beat fifty forgettable ones.\n\n"
-    "t.me/ChickenBeast"
+    "Quality over quantity."
 )
 
 SQUAD = (
     "<b>👥 Gym Squads</b>\n\n"
-    "Form a squad with friends. Your combined BP unlocks group multipliers.\n"
-    "Share your invite link. When recruits join through you, you both get a head start.\n\n"
+    "Form a squad with friends. Combined BP unlocks group multipliers.\n"
+    "Share your invite link from the Profile tab.\n\n"
     "Direct recruits: 10% of their BP\n"
     "Their recruits: 3% of their BP"
 )
@@ -46,33 +46,54 @@ SQUAD = (
 PUMP = (
     "<b>🔥 Global Pump</b>\n\n"
     "Every 24 hours a 5-minute Global Pump hits.\n"
-    "Stamina becomes infinite and all taps earn 5× BP.\n"
+    "Energy becomes infinite and all taps earn 5× BP.\n"
     "Watch the bot for the countdown."
+)
+
+NOTIFY = (
+    "<b>🔔 Notifications</b>\n\n"
+    "The bot can ping you for:\n"
+    "• Daily streak reminders\n"
+    "• Global Pump countdown\n"
+    "• Mission claim alerts\n"
+    "• Evolution unlocks\n\n"
+    "Enable by starting the bot and keeping the chat unmuted.\n"
+    "(Full push system ships with Phase 3 server.)"
+)
+
+STREAK = (
+    "<b>🔥 7-Day Streak</b>\n\n"
+    "Claim your daily reward every day to keep the streak.\n"
+    "Rewards increase: Day 1 → Day 7.\n"
+    "Miss a day and it resets.\n\n"
+    "Open the app → Home tab → Claim Daily Reward."
 )
 
 
 def welcome(name: str) -> str:
     return (
         f"🐓💪 <b>Welcome to the gym, {html.escape(name)}!</b>\n\n"
-        "<b>Chickenbeast is TOO JACKED TO RUG.</b>\n\n"
-        "Tap the beast to earn <b>Beast Points</b>, claim your passive gains, "
-        "buy upgrades and climb the leaderboard.\n\n"
-        "🐓 Ranks from Scrawny Chick → Apex Beast\n"
-        "🔥 Frenzy mode on rapid taps\n"
-        "🥚 Offline vault builds while you're away\n"
-        "🔥 7-day streak rewards\n\n"
-        "No wallet needed. Just open and start flexing. Tap PLAY 👇"
+        "<b>Chicken Beast is TOO JACKED TO RUG.</b>\n\n"
+        "Tap to train, earn Grain & BP, claim daily rewards, "
+        "buy upgrades and climb the ranks.\n\n"
+        "🐣 Hatchling → Apex Beast\n"
+        "⚡ Energy system + regen\n"
+        "🥚 Grain for upgrades\n"
+        "🔥 7-day streak\n"
+        "⭐ Daily missions\n\n"
+        "No wallet needed. Tap PLAY 👇"
     )
 
 
 HELP = (
-    "<b>How Chickenbeast works</b>\n\n"
-    "1. Tap <b>PLAY</b> to open the gym\n"
-    "2. Tap the beast: every tap = Beast Points (BP). 12 fast taps = Frenzy (2× BP)\n"
-    "3. Claim the Vault: passive BP builds up for up to 8 hours\n"
-    "4. Spend BP on Whey, Creatine, Pre-Workout and Mega Flex\n"
-    "5. Check your 7-day streak for daily bonuses\n\n"
-    "Beast Points are in-game points. No wallet required to play."
+    "<b>How Chicken Beast works</b>\n\n"
+    "1. Tap <b>PLAY</b> to open the app\n"
+    "2. Tap the chicken: earn XP, BP and Grain. Energy drains, then regenerates\n"
+    "3. Claim Daily Reward on Home to keep your streak\n"
+    "4. Train tab: spend Grain on Iron Pecks, Big Lungs, Fast Digest\n"
+    "5. Missions tab: complete daily goals for bonus rewards\n"
+    "6. Profile: share your Gym Card and join a Squad\n\n"
+    "Beast Points and Grain are in-game. No wallet required to play."
 )
 
 
@@ -96,11 +117,13 @@ def api(method: str, body: dict, timeout: int = 30) -> dict:
 def setup_bot() -> None:
     api("setMyCommands", {"commands": [
         {"command": "start", "description": "Open the gym"},
-        {"command": "play", "description": "Play Chickenbeast"},
+        {"command": "play", "description": "Play Chicken Beast"},
         {"command": "help", "description": "How it works"},
         {"command": "contest", "description": "Meme contest rules"},
         {"command": "squad", "description": "Gym Squads"},
         {"command": "pump", "description": "Global Pump event"},
+        {"command": "notify", "description": "Notification options"},
+        {"command": "streak", "description": "Daily streak info"},
     ]})
     api("setChatMenuButton", {"menu_button": {"type": "web_app", "text": "PLAY", "web_app": {"url": APP_URL}}})
 
@@ -108,10 +131,11 @@ def setup_bot() -> None:
 def play_markup(ref: str = "") -> dict:
     url = APP_URL + (f"?ref={ref}" if ref else "")
     return {"inline_keyboard": [
-        [{"text": "🐓 PLAY CHICKENBEAST", "web_app": {"url": url}}],
+        [{"text": "🐓 PLAY CHICKEN BEAST", "web_app": {"url": url}}],
         [{"text": "💪 How it works", "callback_data": "help"}],
         [{"text": "🏆 Meme Contest", "callback_data": "contest"}],
-        [{"text": "👥 Gym Squads", "callback_data": "squad"}],
+        [{"text": "👥 Squads", "callback_data": "squad"}],
+        [{"text": "🔔 Notifications", "callback_data": "notify"}],
     ]}
 
 
@@ -129,6 +153,10 @@ def handle(update: dict) -> None:
             text = SQUAD
         elif cmd == "/pump":
             text = PUMP
+        elif cmd == "/notify":
+            text = NOTIFY
+        elif cmd == "/streak":
+            text = STREAK
         else:
             text = welcome(name)
         parts = msg["text"].strip().split()
@@ -152,6 +180,9 @@ def handle(update: dict) -> None:
         elif data == "squad" and chat:
             r = api("sendMessage", {"chat_id": chat, "text": SQUAD, "parse_mode": "HTML", "reply_markup": PLAY})
             print(f"reply squad-button -> ok={r.get('ok')}", flush=True)
+        elif data == "notify" and chat:
+            r = api("sendMessage", {"chat_id": chat, "text": NOTIFY, "parse_mode": "HTML", "reply_markup": PLAY})
+            print(f"reply notify-button -> ok={r.get('ok')}", flush=True)
 
 
 def main() -> int:
